@@ -1,32 +1,57 @@
-const express = require('express');
-const app = express();
-const server = require('http').Server(app);
-const io = require('socket.io')(server);
-const { v4: uuidv4 } = require('uuid');
+// ... (əvvəlki importlar)
+const mongoose = require('mongoose');
+const Room = require('./models/Room');
 
-app.set('view engine', 'ejs'); // HTML render etmək üçün
-app.use(express.static('public'));
+// MongoDB qoşulması (Render-də Environment Variable istifadə edin)
+mongoose.connect('mongodb+srv://SIZIN_MONGO_URL_BURA', { useNewUrlParser: true, useUnifiedTopology: true });
 
-// Ana səhifə: Avtomatik otaq ID-si yaradıb yönləndirir
-app.get('/', (req, res) => {
-  res.redirect(`/${uuidv4()}`);
+// 10 Random Otaq API-si
+app.get('/api/rooms', async (req, res) => {
+    // Random 10 otaq gətirir
+    const rooms = await Room.aggregate([{ $sample: { size: 10 } }]);
+    res.json(rooms);
 });
 
-// Otaq səhifəsi
-app.get('/:room', (req, res) => {
-  res.sendFile(__dirname + '/public/index.html');
+// Otaq Yaratmaq
+app.post('/create-room', async (req, res) => {
+    const { name, password, maxUsers, userId } = req.body;
+    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 simvol
+    
+    const newRoom = new Room({ roomId, name, password, maxUsers, creatorId: userId });
+    await newRoom.save();
+    res.json({ roomId });
 });
 
-// Socket.io - İstifadəçi qoşulanda işə düşür
+// Socket.io Logic (Kick və Join)
 io.on('connection', socket => {
-  socket.on('join-room', (roomId, userId) => {
-    socket.join(roomId);
-    socket.to(roomId).broadcast.emit('user-connected', userId);
+    socket.on('join-room', async (roomId, userId, userName) => {
+        const room = await Room.findOne({ roomId });
+        
+        // Limit yoxlanışı
+        if(room && room.activeUsers.length >= room.maxUsers) {
+            socket.emit('error', 'Otaq doludur');
+            return;
+        }
 
-    socket.on('disconnect', () => {
-      socket.to(roomId).broadcast.emit('user-disconnected', userId);
+        socket.join(roomId);
+        socket.to(roomId).emit('user-connected', userId, userName);
+
+        // Chat Mesajı
+        socket.on('send-message', (message) => {
+            io.to(roomId).emit('create-message', message, userName);
+        });
+
+        // Kick (Qovmaq) Sistemi
+        socket.on('kick-user', (targetUserId) => {
+            // Yalnız otaq sahibi edə bilsin (bunu server tərəfdə yoxlamaq lazımdır)
+            if(room.creatorId === userId) {
+                 io.to(roomId).emit('kicked', targetUserId);
+            }
+        });
+
+        socket.on('disconnect', () => {
+             socket.to(roomId).emit('user-disconnected', userId);
+             // DB-dən useri silmək lazımdır
+        });
     });
-  });
 });
-
-server.listen(process.env.PORT || 3000);
