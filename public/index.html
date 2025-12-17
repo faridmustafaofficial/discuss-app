@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="az">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DISCUSS - Səsli Otaq</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>DISCUSS</h1>
+        <p>Otaq ID-si: <span id="room-id-display"></span></p>
+        <div id="video-grid"></div> <div class="controls">
+            <button onclick="toggleMute()">Səsi Aç/Bağla</button>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
